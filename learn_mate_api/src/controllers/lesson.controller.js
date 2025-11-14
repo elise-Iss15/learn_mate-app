@@ -1,6 +1,6 @@
 const { pool } = require('../config/database');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { uploadFile, deleteFile } = require('../config/cloudinary');
+const { uploadFile, deleteFile, getDownloadUrl } = require('../config/dropbox');
 const fs = require('fs').promises;
 
 /**
@@ -84,7 +84,6 @@ const createLesson = asyncHandler(async (req, res) => {
   } = req.body;
   const created_by = req.user.id;
 
-  // Verify subject exists
   const [subjects] = await pool.query(
     'SELECT id, created_by FROM subjects WHERE id = ?',
     [subject_id]
@@ -97,7 +96,6 @@ const createLesson = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check if user is owner or admin
   if (req.user.role !== 'admin' && subjects[0].created_by !== req.user.id) {
     return res.status(403).json({
       success: false,
@@ -107,15 +105,12 @@ const createLesson = asyncHandler(async (req, res) => {
 
   let fileData = null;
   
-  // Handle file upload if present
   if (req.file) {
     try {
-      fileData = await uploadFile(req.file.path, 'learnmate/lessons');
+      fileData = await uploadFile(req.file.path, '/learnmate/lessons', req.file.originalname);
       
-      // Delete temporary file
       await fs.unlink(req.file.path);
     } catch (error) {
-      // Clean up temp file on error
       if (req.file && req.file.path) {
         await fs.unlink(req.file.path).catch(() => {});
       }
@@ -134,7 +129,7 @@ const createLesson = asyncHandler(async (req, res) => {
     title,
     content || null,
     fileData ? fileData.url : null,
-    fileData ? fileData.publicId : null,
+    fileData ? fileData.path : null,
     req.file ? req.file.originalname : null,
     order_number || null,
     language,
@@ -142,7 +137,6 @@ const createLesson = asyncHandler(async (req, res) => {
     is_published
   ]);
 
-  // Fetch created lesson
   const [lessons] = await pool.query(
     'SELECT * FROM lessons WHERE id = ?',
     [result.insertId]
@@ -195,12 +189,12 @@ const updateLesson = asyncHandler(async (req, res) => {
   // Handle file upload if present
   if (req.file) {
     try {
-      // Delete old file from Cloudinary if exists
+      // Delete old file from Dropbox if exists
       if (lesson.content_file_public_id) {
         await deleteFile(lesson.content_file_public_id);
       }
       
-      fileData = await uploadFile(req.file.path, 'learnmate/lessons');
+      fileData = await uploadFile(req.file.path, '/learnmate/lessons', req.file.originalname);
       
       // Delete temporary file
       await fs.unlink(req.file.path);
@@ -230,7 +224,7 @@ const updateLesson = asyncHandler(async (req, res) => {
     title || lesson.title,
     content !== undefined ? content : lesson.content,
     fileData ? fileData.url : lesson.content_file_url,
-    fileData ? fileData.publicId : lesson.content_file_public_id,
+    fileData ? fileData.path : lesson.content_file_public_id,
     req.file ? req.file.originalname : lesson.content_file_name,
     order_number !== undefined ? order_number : lesson.order_number,
     language || lesson.language,
@@ -259,7 +253,6 @@ const updateLesson = asyncHandler(async (req, res) => {
 const deleteLesson = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  // Get lesson and subject info
   const [lessons] = await pool.query(
     `SELECT l.*, s.created_by as subject_creator
      FROM lessons l
@@ -277,7 +270,6 @@ const deleteLesson = asyncHandler(async (req, res) => {
 
   const lesson = lessons[0];
 
-  // Check if user is owner or admin
   if (req.user.role !== 'admin' && lesson.subject_creator !== req.user.id) {
     return res.status(403).json({
       success: false,
@@ -285,17 +277,14 @@ const deleteLesson = asyncHandler(async (req, res) => {
     });
   }
 
-  // Delete file from Cloudinary if exists
   if (lesson.content_file_public_id) {
     try {
       await deleteFile(lesson.content_file_public_id);
     } catch (error) {
-      console.error('Failed to delete file from Cloudinary:', error);
-      // Continue with lesson deletion even if file deletion fails
+      console.error('Failed to delete file from Dropbox:', error);
     }
   }
 
-  // Delete lesson (cascades to quizzes, progress, etc.)
   await pool.query('DELETE FROM lessons WHERE id = ?', [id]);
 
   res.json({
@@ -314,7 +303,6 @@ const updateLessonProgress = asyncHandler(async (req, res) => {
   const { is_completed, time_spent } = req.body;
   const student_id = req.user.id;
 
-  // Verify lesson exists
   const [lessons] = await pool.query(
     'SELECT id FROM lessons WHERE id = ? AND is_published = true',
     [id]
@@ -327,14 +315,12 @@ const updateLessonProgress = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check if progress record exists
   const [existingProgress] = await pool.query(
     'SELECT * FROM student_progress WHERE student_id = ? AND lesson_id = ?',
     [student_id, id]
   );
 
   if (existingProgress.length > 0) {
-    // Update existing progress
     const currentProgress = existingProgress[0];
     const query = `
       UPDATE student_progress
@@ -349,7 +335,6 @@ const updateLessonProgress = asyncHandler(async (req, res) => {
       id
     ]);
   } else {
-    // Create new progress record
     const query = `
       INSERT INTO student_progress (student_id, lesson_id, is_completed, time_spent)
       VALUES (?, ?, ?, ?)
@@ -363,7 +348,6 @@ const updateLessonProgress = asyncHandler(async (req, res) => {
     ]);
   }
 
-  // Fetch updated progress
   const [progress] = await pool.query(
     'SELECT * FROM student_progress WHERE student_id = ? AND lesson_id = ?',
     [student_id, id]
@@ -406,7 +390,7 @@ const downloadLessonFile = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const [lessons] = await pool.query(
-    'SELECT content_file_url, content_file_name FROM lessons WHERE id = ? AND is_published = true',
+    'SELECT content_file_url, content_file_name, content_file_public_id FROM lessons WHERE id = ? AND is_published = true',
     [id]
   );
 
@@ -426,7 +410,6 @@ const downloadLessonFile = asyncHandler(async (req, res) => {
     });
   }
 
-  // Redirect to Cloudinary URL with content-disposition header for download
   res.redirect(lesson.content_file_url);
 });
 
