@@ -169,6 +169,7 @@ export default function LessonPage() {
       </div>
     );
   }
+  console.log('Lesson data:', lesson);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">

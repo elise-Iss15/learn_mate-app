@@ -8,11 +8,19 @@ import { useOnlineStatus } from '@/hooks/use-online-status';
 import { Quiz as APIQuiz, Question } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, CheckCircle, XCircle, Award } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle, XCircle, Award, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface QuizResult {
   score: number;
@@ -40,6 +48,7 @@ export default function QuizPage() {
   const [answers, setAnswers] = useState<Record<number, string | number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<QuizResult | null>(null);
+  const [showMaxAttemptsDialog, setShowMaxAttemptsDialog] = useState(false);
 
   useEffect(() => {
     fetchQuiz();
@@ -83,7 +92,7 @@ export default function QuizPage() {
 
   const handleSubmit = async () => {
     if (!quiz) return;
-    
+
     const unanswered = quiz.questions.filter(q => !answers[q.id]);
     if (unanswered.length > 0) {
       alert(`Please answer all questions. ${unanswered.length} question(s) remaining.`);
@@ -97,7 +106,6 @@ export default function QuizPage() {
         answers: quiz.questions.map(q => {
           let studentAnswer = answers[q.id];
           
-          // For multiple choice, convert option ID back to option text for backend
           if (q.question_type === 'multiple_choice' && typeof studentAnswer === 'number') {
             const selectedOption = q.options?.find(opt => opt.id === studentAnswer);
             studentAnswer = selectedOption?.option_text || '';
@@ -111,15 +119,32 @@ export default function QuizPage() {
       };
 
       if (isOnline) {
-        const attemptResponse = await api.startQuizAttempt(quizId);
-        const attemptData = attemptResponse.data || attemptResponse;
-        
-        const submitResponse = await api.submitQuiz(quizId, {
-          attempt_id: attemptData.attempt_id,
-          answers: submissionData.answers
-        });
-        
-        const resultData = submitResponse.data || submitResponse;
+        let resultData;
+        try {
+          const attemptResponse = await api.startQuizAttempt(quizId);
+          const attemptData = attemptResponse.data || attemptResponse;
+          
+          const submitResponse = await api.submitQuiz(quizId, {
+            attempt_id: attemptData.attempt_id,
+            answers: submissionData.answers
+          });
+          
+          resultData = submitResponse.data || submitResponse;
+          
+          if (resultData.success === false && resultData.message?.includes('Maximum attempts reached')) {
+            setShowMaxAttemptsDialog(true);
+            setSubmitting(false);
+            return;
+          }
+        } catch (apiError: any) {
+          const errorMessage = apiError.response?.data?.message || apiError.message || '';
+          if (errorMessage.includes('Maximum attempts reached')) {
+            setShowMaxAttemptsDialog(true);
+            setSubmitting(false);
+            return;
+          }
+          throw apiError;
+        }
         
         setResult({
           score: resultData.score,
@@ -134,7 +159,7 @@ export default function QuizPage() {
             let selectedAnswerDisplay = '';
             
             if (question?.question_type === 'multiple_choice' && typeof studentAnswerId === 'number') {
-              // Find the correct and selected options by ID
+              
               const correctOption = question.options?.find(opt => opt.is_correct);
               const selectedOption = question.options?.find(opt => opt.id === studentAnswerId);
               
@@ -233,6 +258,31 @@ export default function QuizPage() {
         <Alert variant="destructive">
           <AlertDescription>{error || 'Quiz not found'}</AlertDescription>
         </Alert>
+      </div>
+    );
+  }
+
+  if (quiz && (!quiz.questions || quiz.questions.length === 0)) {
+    return (
+      <div className="space-y-4 max-w-3xl mx-auto">
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <Card>
+          <CardContent className="text-center py-12">
+            <div className="mx-auto w-20 h-20 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
+              <AlertCircle className="h-10 w-10 text-yellow-600" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">No Questions Yet</h3>
+            <p className="text-muted-foreground mb-4">
+              This quiz hasn't been set up with questions yet. Please check back later or contact your teacher.
+            </p>
+            <Button onClick={() => router.back()}>
+              Back to Lessons
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -375,7 +425,6 @@ export default function QuizPage() {
         </CardHeader>
       </Card>
 
-      {/* Question Card */}
       <Card>
         <CardContent className="pt-6 space-y-6">
           <div>
@@ -411,7 +460,7 @@ export default function QuizPage() {
                           )}
                         </div>
                         <div>
-                          <span className="font-medium">{optionLetter}.</span> {option.option_text}
+                          <span className="font-medium">{optionLetter}.</span> {option?.option_text}
                         </div>
                       </div>
                     </button>
@@ -420,7 +469,6 @@ export default function QuizPage() {
               </div>
             )}
 
-            {/* True/False Questions */}
             {question.question_type === 'true_false' && (
               <div className="flex gap-4">
                 <button
@@ -469,7 +517,6 @@ export default function QuizPage() {
               </div>
             )}
 
-            {/* Short Answer Questions */}
             {question.question_type === 'short_answer' && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">
@@ -486,7 +533,6 @@ export default function QuizPage() {
             )}
           </div>
 
-          {/* Navigation */}
           <div className="flex justify-between pt-6 border-t">
             <Button
               variant="outline"
@@ -528,6 +574,41 @@ export default function QuizPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      <Dialog open={showMaxAttemptsDialog} onOpenChange={setShowMaxAttemptsDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <DialogTitle className="text-xl">Maximum Attempts Reached</DialogTitle>
+            </div>
+            <DialogDescription className="text-base pt-2">
+              You have reached the maximum number of attempts allowed for this quiz. 
+              If you believe you need additional attempts, please contact your instructor for assistance.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMaxAttemptsDialog(false);
+                router.back();
+              }}
+            >
+              Back to Lessons
+            </Button>
+            <Button
+              onClick={() => {
+                setShowMaxAttemptsDialog(false);
+              }}
+            >
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
