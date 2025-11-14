@@ -210,7 +210,29 @@
           }
         },
         {
-          "name": "Create Lesson",
+          "name": "Get Lessons by Subject",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/lessons/subject/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["lessons", "subject", "1"]
+            }
+          }
+        },
+        {
+          "name": "Download Lesson PDF",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/lessons/1/download",
+              "host": ["{{baseUrl}}"],
+              "path": ["lessons", "1", "download"]
+            }
+          }
+        },
+        {
+          "name": "Create Lesson (JSON only)",
           "request": {
             "method": "POST",
             "header": [
@@ -231,6 +253,149 @@
               "raw": "{{baseUrl}}/lessons",
               "host": ["{{baseUrl}}"],
               "path": ["lessons"]
+            }
+          }
+        },
+        {
+          "name": "Create Lesson with PDF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "subject_id",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "title",
+                  "value": "Introduction to Algebra",
+                  "type": "text"
+                },
+                {
+                  "key": "content",
+                  "value": "Algebra is a branch of mathematics dealing with symbols and rules...",
+                  "type": "text"
+                },
+                {
+                  "key": "order_number",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "language",
+                  "value": "en",
+                  "type": "text"
+                },
+                {
+                  "key": "is_published",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Select a PDF file to upload"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lessons",
+              "host": ["{{baseUrl}}"],
+              "path": ["lessons"]
+            }
+          }
+        },
+        {
+          "name": "Update Lesson (JSON only)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Lesson Title\",\n  \"content\": \"Updated lesson content...\",\n  \"is_published\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lessons/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["lessons", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update Lesson with PDF",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "Updated Algebra Lesson",
+                  "type": "text"
+                },
+                {
+                  "key": "content",
+                  "value": "Updated algebra content...",
+                  "type": "text"
+                },
+                {
+                  "key": "is_published",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Select a new PDF file to replace existing one"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lessons/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["lessons", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Lesson",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/lessons/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["lessons", "1"]
             }
           }
         },

@@ -18,8 +18,11 @@ pids/
 # Coverage directory
 coverage/
 
-# Uploads
-uploads/
+# Uploads (but keep directory structure)
+uploads/*
+!uploads/temp/
+uploads/temp/*
+!uploads/temp/.gitkeep
 
 # OS files
 .DS_Store

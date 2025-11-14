@@ -5,6 +5,7 @@ const { lessonValidation, idValidation, progressValidation } = require('../utils
 const { validate } = require('../middleware/validation');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
 const { isTeacherOrAdmin, isStudent } = require('../middleware/roleCheck');
+const upload = require('../middleware/fileUpload');
 
 /**
  * @route   GET /api/lessons/subject/:subjectId
@@ -12,6 +13,13 @@ const { isTeacherOrAdmin, isStudent } = require('../middleware/roleCheck');
  * @access  Public
  */
 router.get('/subject/:subjectId', lessonController.getLessonsBySubject);
+
+/**
+ * @route   GET /api/lessons/:id/download
+ * @desc    Download lesson PDF file
+ * @access  Public
+ */
+router.get('/:id/download', lessonController.downloadLessonFile);
 
 /**
  * @route   GET /api/lessons/:id
@@ -22,17 +30,17 @@ router.get('/:id', optionalAuth, idValidation, validate, lessonController.getLes
 
 /**
  * @route   POST /api/lessons
- * @desc    Create new lesson
+ * @desc    Create new lesson with optional PDF upload
  * @access  Private (Teacher, Admin)
  */
-router.post('/', authenticateToken, isTeacherOrAdmin, lessonValidation, validate, lessonController.createLesson);
+router.post('/', authenticateToken, isTeacherOrAdmin, upload.single('file'), lessonValidation, validate, lessonController.createLesson);
 
 /**
  * @route   PUT /api/lessons/:id
- * @desc    Update lesson
+ * @desc    Update lesson with optional PDF upload
  * @access  Private (Teacher-owner, Admin)
  */
-router.put('/:id', authenticateToken, isTeacherOrAdmin, [...idValidation, ...lessonValidation], validate, lessonController.updateLesson);
+router.put('/:id', authenticateToken, isTeacherOrAdmin, upload.single('file'), [...idValidation, ...lessonValidation], validate, lessonController.updateLesson);
 
 /**
  * @route   DELETE /api/lessons/:id

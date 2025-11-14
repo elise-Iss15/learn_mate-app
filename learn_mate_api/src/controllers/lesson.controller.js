@@ -1,5 +1,7 @@
 const { pool } = require('../config/database');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { uploadFile, deleteFile } = require('../config/cloudinary');
+const fs = require('fs').promises;
 
 /**
  * Get lesson by ID
@@ -54,6 +56,12 @@ const getLessonById = asyncHandler(async (req, res) => {
     lesson.user_progress = progress.length > 0 ? progress[0] : null;
   }
 
+  // If lesson has a file, trigger download by setting appropriate headers
+  if (lesson.content_file_url) {
+    lesson.has_file = true;
+    lesson.file_download_url = `/api/lessons/${id}/download`;
+  }
+
   res.json({
     success: true,
     data: { lesson }
@@ -97,15 +105,37 @@ const createLesson = asyncHandler(async (req, res) => {
     });
   }
 
+  let fileData = null;
+  
+  // Handle file upload if present
+  if (req.file) {
+    try {
+      fileData = await uploadFile(req.file.path, 'learnmate/lessons');
+      
+      // Delete temporary file
+      await fs.unlink(req.file.path);
+    } catch (error) {
+      // Clean up temp file on error
+      if (req.file && req.file.path) {
+        await fs.unlink(req.file.path).catch(() => {});
+      }
+      throw new Error(`File upload failed: ${error.message}`);
+    }
+  }
+
   const query = `
-    INSERT INTO lessons (subject_id, title, content, order_number, language, created_by, is_published)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO lessons (subject_id, title, content, content_file_url, content_file_public_id, 
+                        content_file_name, order_number, language, created_by, is_published)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const [result] = await pool.query(query, [
     subject_id,
     title,
     content || null,
+    fileData ? fileData.url : null,
+    fileData ? fileData.publicId : null,
+    req.file ? req.file.originalname : null,
     order_number || null,
     language,
     created_by,
@@ -160,15 +190,48 @@ const updateLesson = asyncHandler(async (req, res) => {
     });
   }
 
+  let fileData = null;
+  
+  // Handle file upload if present
+  if (req.file) {
+    try {
+      // Delete old file from Cloudinary if exists
+      if (lesson.content_file_public_id) {
+        await deleteFile(lesson.content_file_public_id);
+      }
+      
+      fileData = await uploadFile(req.file.path, 'learnmate/lessons');
+      
+      // Delete temporary file
+      await fs.unlink(req.file.path);
+    } catch (error) {
+      // Clean up temp file on error
+      if (req.file && req.file.path) {
+        await fs.unlink(req.file.path).catch(() => {});
+      }
+      throw new Error(`File upload failed: ${error.message}`);
+    }
+  }
+
   const query = `
     UPDATE lessons
-    SET title = ?, content = ?, order_number = ?, language = ?, is_published = ?
+    SET title = ?, 
+        content = ?, 
+        content_file_url = ?,
+        content_file_public_id = ?,
+        content_file_name = ?,
+        order_number = ?, 
+        language = ?, 
+        is_published = ?
     WHERE id = ?
   `;
 
   await pool.query(query, [
     title || lesson.title,
     content !== undefined ? content : lesson.content,
+    fileData ? fileData.url : lesson.content_file_url,
+    fileData ? fileData.publicId : lesson.content_file_public_id,
+    req.file ? req.file.originalname : lesson.content_file_name,
     order_number !== undefined ? order_number : lesson.order_number,
     language || lesson.language,
     is_published !== undefined ? is_published : lesson.is_published,
@@ -220,6 +283,16 @@ const deleteLesson = asyncHandler(async (req, res) => {
       success: false,
       message: 'You can only delete lessons in your own subjects'
     });
+  }
+
+  // Delete file from Cloudinary if exists
+  if (lesson.content_file_public_id) {
+    try {
+      await deleteFile(lesson.content_file_public_id);
+    } catch (error) {
+      console.error('Failed to delete file from Cloudinary:', error);
+      // Continue with lesson deletion even if file deletion fails
+    }
   }
 
   // Delete lesson (cascades to quizzes, progress, etc.)
@@ -325,11 +398,44 @@ const getLessonsBySubject = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Download lesson file
+ * GET /api/lessons/:id/download
+ */
+const downloadLessonFile = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const [lessons] = await pool.query(
+    'SELECT content_file_url, content_file_name FROM lessons WHERE id = ? AND is_published = true',
+    [id]
+  );
+
+  if (lessons.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: 'Lesson not found or not published'
+    });
+  }
+
+  const lesson = lessons[0];
+
+  if (!lesson.content_file_url) {
+    return res.status(404).json({
+      success: false,
+      message: 'No file attached to this lesson'
+    });
+  }
+
+  // Redirect to Cloudinary URL with content-disposition header for download
+  res.redirect(lesson.content_file_url);
+});
+
 module.exports = {
   getLessonById,
   createLesson,
   updateLesson,
   deleteLesson,
   updateLessonProgress,
-  getLessonsBySubject
+  getLessonsBySubject,
+  downloadLessonFile
 };
