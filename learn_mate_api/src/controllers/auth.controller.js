@@ -167,7 +167,6 @@ const refreshToken = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get user from token (already verified by middleware)
   const userId = req.user.id;
 
   // Fetch user details
@@ -185,13 +184,10 @@ const refreshToken = asyncHandler(async (req, res) => {
 
   const user = users[0];
 
-  // Generate new tokens
   const tokens = generateTokens(user);
   
-  // Delete old refresh token
   await deleteRefreshToken(refreshToken);
   
-  // Store new refresh token
   await storeRefreshToken(user.id, tokens.refreshToken);
 
   res.json({
@@ -209,10 +205,8 @@ const logout = asyncHandler(async (req, res) => {
   const { refreshToken } = req.body;
 
   if (refreshToken) {
-    // Delete specific refresh token
     await deleteRefreshToken(refreshToken);
   } else if (req.user) {
-    // Delete all refresh tokens for user
     await deleteAllUserTokens(req.user.id);
   }
 

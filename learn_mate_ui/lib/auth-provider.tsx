@@ -6,19 +6,18 @@ import { syncService } from './sync-service';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkAuth = useAuthStore(state => state.checkAuth);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
 
   useEffect(() => {
-    // Check authentication on mount
     checkAuth();
 
-    // Start sync service
     syncService.start();
 
     return () => {
-      // Stop sync service on unmount
       syncService.stop();
     };
-  }, [checkAuth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return <>{children}</>;
 }

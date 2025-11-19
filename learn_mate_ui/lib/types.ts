@@ -148,27 +148,113 @@ export interface StudentDashboard {
 export interface TeacherDashboard {
   total_subjects: number;
   total_lessons: number;
+  total_quizzes: number;
   total_students: number;
-  subjects: Array<{
+  recent_submissions: Array<{
+    id: number;
+    score: number;
+    total_points: number;
+    completed_at: string;
+    student_name: string;
+    first_name: string;
+    last_name: string;
+    quiz_title: string;
+    lesson_title: string;
+    subject_name: string;
+  }>;
+  top_subjects: Array<{
     id: number;
     name: string;
     enrolled_students: number;
     total_lessons: number;
-    avg_completion_rate: number;
+    avg_quiz_score: number | null;
   }>;
 }
 
-export interface TeacherAnalytics {
-  subject_id: number;
+export interface TeacherSubjectsResponse {
+  subjects: Array<Subject & {
+    lesson_count: number;
+    student_count: number;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export interface EnrolledStudent {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  grade_level: number;
+  enrolled_at: string;
+  lessons_completed: number;
+  total_lessons: number;
+  completion_rate: number;
+  avg_quiz_score: number | null;
+}
+
+export interface SubjectStudentsResponse {
+  subject: Subject;
+  students: EnrolledStudent[];
+  total_students: number;
+}
+
+export interface SubjectAnalytics {
   subject_name: string;
   total_students: number;
-  avg_completion_rate: number;
-  student_performance: Array<{
-    student_id: number;
+  total_lessons: number;
+  completion_rate: number;
+  average_quiz_score: number | null;
+  total_quiz_attempts: number;
+  top_performers: Array<{
+    id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+    average_score: number;
     student_name: string;
-    lessons_completed: number;
-    total_lessons: number;
-    avg_quiz_score: number;
+  }>;
+  struggling_students: Array<{
+    id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+    average_score: number;
+    student_name: string;
+  }>;
+}
+
+export interface QuizResultsResponse {
+  quiz: {
+    id: number;
+    title: string;
+    passing_score: number;
+  };
+  statistics: {
+    total_attempts: number;
+    average_score: number;
+    passed: number;
+    failed: number;
+    pass_rate: number;
+  };
+  attempts: Array<{
+    id: number;
+    student_id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    score: number;
+    total_points: number;
+    percentage: number;
+    started_at: string;
+    completed_at: string;
+    student_name: string;
   }>;
 }
 

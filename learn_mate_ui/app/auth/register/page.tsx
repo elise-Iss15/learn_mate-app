@@ -21,7 +21,7 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'student' as 'student' | 'teacher' | 'admin',
+    role: 'student' as const,
     first_name: '',
     last_name: '',
     grade_level: 8,
@@ -29,11 +29,13 @@ export default function RegisterPage() {
   });
   
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
@@ -52,7 +54,18 @@ export default function RegisterPage() {
       await register(registerData);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      const responseData = err.response?.data;
+      
+      if (responseData?.errors && Array.isArray(responseData.errors)) {
+        const errors: Record<string, string> = {};
+        responseData.errors.forEach((error: any) => {
+          errors[error.field] = error.message;
+        });
+        setFieldErrors(errors);
+        setError('Please fix the validation errors below');
+      } else {
+        setError(responseData?.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -89,7 +102,11 @@ export default function RegisterPage() {
                   onChange={(e) => updateFormData('first_name', e.target.value)}
                   required
                   disabled={isLoading}
+                  className={fieldErrors.first_name ? 'border-red-500' : ''}
                 />
+                {fieldErrors.first_name && (
+                  <p className="text-sm text-red-500">{fieldErrors.first_name}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -101,7 +118,11 @@ export default function RegisterPage() {
                   onChange={(e) => updateFormData('last_name', e.target.value)}
                   required
                   disabled={isLoading}
+                  className={fieldErrors.last_name ? 'border-red-500' : ''}
                 />
+                {fieldErrors.last_name && (
+                  <p className="text-sm text-red-500">{fieldErrors.last_name}</p>
+                )}
               </div>
             </div>
             
@@ -114,7 +135,11 @@ export default function RegisterPage() {
                 onChange={(e) => updateFormData('username', e.target.value)}
                 required
                 disabled={isLoading}
+                className={fieldErrors.username ? 'border-red-500' : ''}
               />
+              {fieldErrors.username && (
+                <p className="text-sm text-red-500">{fieldErrors.username}</p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -127,7 +152,11 @@ export default function RegisterPage() {
                 onChange={(e) => updateFormData('email', e.target.value)}
                 required
                 disabled={isLoading}
+                className={fieldErrors.email ? 'border-red-500' : ''}
               />
+              {fieldErrors.email && (
+                <p className="text-sm text-red-500">{fieldErrors.email}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -141,7 +170,11 @@ export default function RegisterPage() {
                   onChange={(e) => updateFormData('password', e.target.value)}
                   required
                   disabled={isLoading}
+                  className={fieldErrors.password ? 'border-red-500' : ''}
                 />
+                {fieldErrors.password && (
+                  <p className="text-sm text-red-500">{fieldErrors.password}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -160,44 +193,27 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
+                <Label htmlFor="grade_level">Grade Level</Label>
                 <Select
-                  value={formData.role}
-                  onValueChange={(value) => updateFormData('role', value)}
+                  value={formData.grade_level.toString()}
+                  onValueChange={(value) => updateFormData('grade_level', parseInt(value))}
                   disabled={isLoading}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={fieldErrors.grade_level ? 'border-red-500' : ''}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="teacher">Teacher</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    {[6, 7, 8, 9, 10, 11, 12].map((grade) => (
+                      <SelectItem key={grade} value={grade.toString()}>
+                        Grade {grade}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {fieldErrors.grade_level && (
+                  <p className="text-sm text-red-500">{fieldErrors.grade_level}</p>
+                )}
               </div>
-
-              {formData.role === 'student' && (
-                <div className="space-y-2">
-                  <Label htmlFor="grade_level">Grade Level</Label>
-                  <Select
-                    value={formData.grade_level.toString()}
-                    onValueChange={(value) => updateFormData('grade_level', parseInt(value))}
-                    disabled={isLoading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[6, 7, 8, 9, 10, 11, 12].map((grade) => (
-                        <SelectItem key={grade} value={grade.toString()}>
-                          Grade {grade}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
 
               <div className="space-y-2">
                 <Label htmlFor="language">Preferred Language</Label>

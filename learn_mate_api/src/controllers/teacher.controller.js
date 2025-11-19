@@ -151,7 +151,6 @@ const getEnrolledStudents = asyncHandler(async (req, res) => {
   const { subjectId } = req.params;
   const teacher_id = req.user.id;
 
-  // Verify teacher owns the subject
   const [subjects] = await pool.query(
     'SELECT * FROM subjects WHERE id = ? AND created_by = ?',
     [subjectId, teacher_id]
@@ -164,7 +163,6 @@ const getEnrolledStudents = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get enrolled students with their progress
   const [students] = await pool.query(
     `SELECT 
        u.id,
@@ -219,7 +217,6 @@ const getSubjectAnalytics = asyncHandler(async (req, res) => {
   const { subjectId } = req.params;
   const teacher_id = req.user.id;
 
-  // Verify teacher owns the subject
   const [subjects] = await pool.query(
     'SELECT * FROM subjects WHERE id = ? AND created_by = ?',
     [subjectId, teacher_id]
@@ -234,34 +231,31 @@ const getSubjectAnalytics = asyncHandler(async (req, res) => {
 
   const subject = subjects[0];
 
-  // Get total students
   const [studentCount] = await pool.query(
     'SELECT COUNT(*) as count FROM enrollments WHERE subject_id = ?',
     [subjectId]
   );
 
-  // Get total lessons
   const [lessonCount] = await pool.query(
     'SELECT COUNT(*) as count FROM lessons WHERE subject_id = ? AND is_published = true',
     [subjectId]
   );
 
-  // Get completion rate
   const [completionStats] = await pool.query(
-    `SELECT 
-       COUNT(DISTINCT sp.student_id) as students_with_progress,
+    `SELECT
+       COUNT(DISTINCT completed_count.student_id) as students_with_progress,
        AVG(CASE 
          WHEN lesson_total.total > 0 
-         THEN (completed_count.completed / lesson_total.total) * 100 
+         THEN (COALESCE(completed_count.completed, 0) / lesson_total.total) * 100 
          ELSE 0 
        END) as avg_completion_rate
      FROM enrollments e
      LEFT JOIN (
-       SELECT student_id, COUNT(*) as completed
+       SELECT sp.student_id, COUNT(*) as completed
        FROM student_progress sp
        JOIN lessons l ON sp.lesson_id = l.id
        WHERE l.subject_id = ? AND sp.is_completed = true
-       GROUP BY student_id
+       GROUP BY sp.student_id
      ) as completed_count ON e.student_id = completed_count.student_id
      CROSS JOIN (
        SELECT COUNT(*) as total FROM lessons WHERE subject_id = ? AND is_published = true
@@ -270,7 +264,6 @@ const getSubjectAnalytics = asyncHandler(async (req, res) => {
     [subjectId, subjectId, subjectId]
   );
 
-  // Get average quiz score
   const [quizStats] = await pool.query(
     `SELECT 
        AVG(CASE 
@@ -285,7 +278,6 @@ const getSubjectAnalytics = asyncHandler(async (req, res) => {
     [subjectId]
   );
 
-  // Get top performers (top 5 students)
   const [topPerformers] = await pool.query(
     `SELECT 
        u.id,
@@ -309,7 +301,6 @@ const getSubjectAnalytics = asyncHandler(async (req, res) => {
     [subjectId, subjectId]
   );
 
-  // Get struggling students (bottom 5 students)
   const [strugglingStudents] = await pool.query(
     `SELECT 
        u.id,
@@ -369,7 +360,6 @@ const getQuizResults = asyncHandler(async (req, res) => {
   const { quizId } = req.params;
   const teacher_id = req.user.id;
 
-  // Verify teacher owns the quiz
   const [quizzes] = await pool.query(
     `SELECT q.*, s.created_by
      FROM quizzes q
@@ -388,7 +378,6 @@ const getQuizResults = asyncHandler(async (req, res) => {
 
   const quiz = quizzes[0];
 
-  // Get all student attempts
   const [attempts] = await pool.query(
     `SELECT 
        qa.*,
@@ -407,10 +396,9 @@ const getQuizResults = asyncHandler(async (req, res) => {
     [quizId]
   );
 
-  // Calculate statistics
   const totalAttempts = attempts.length;
   const avgScore = totalAttempts > 0
-    ? attempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / totalAttempts
+    ? attempts.reduce((sum, a) => sum + (Number(a.percentage) || 0), 0)/ totalAttempts
     : 0;
   const passedCount = attempts.filter(a => a.percentage >= quiz.passing_score).length;
 
@@ -424,7 +412,7 @@ const getQuizResults = asyncHandler(async (req, res) => {
       },
       statistics: {
         total_attempts: totalAttempts,
-        average_score: Math.round(avgScore),
+        average_score: parseFloat(avgScore.toFixed(2)),
         passed: passedCount,
         failed: totalAttempts - passedCount,
         pass_rate: totalAttempts > 0 

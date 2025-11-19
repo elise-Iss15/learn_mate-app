@@ -9,7 +9,6 @@ import type {
   StudentProgress,
   StudentDashboard,
   TeacherDashboard,
-  TeacherAnalytics,
   AdminAnalytics,
 } from './types';
 

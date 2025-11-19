@@ -3,7 +3,6 @@ import { cacheManager } from './db';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-// Token management
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
 
@@ -54,7 +53,6 @@ const apiClient: AxiosInstance = axios.create({
   timeout: 30000, // 30 seconds
 });
 
-// Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
     const token = tokenManager.getAccessToken();
@@ -68,13 +66,11 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor for token refresh
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-    // If error is 401 and we haven't retried yet
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -88,14 +84,12 @@ apiClient.interceptors.response.use(
           const { accessToken: newAccessToken } = response.data.data;
           tokenManager.setTokens(newAccessToken, refresh);
 
-          // Retry original request
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
           }
           return apiClient(originalRequest);
         }
       } catch (refreshError) {
-        // Refresh failed, logout
         tokenManager.clearTokens();
         if (typeof window !== 'undefined') {
           window.location.href = '/auth/login';
@@ -122,7 +116,6 @@ export const networkStatus = {
   },
 };
 
-// API client with offline support
 class ApiClient {
   private client: AxiosInstance;
 
@@ -130,7 +123,6 @@ class ApiClient {
     this.client = client;
   }
 
-  // Generic request with cache
   async request<T>(
     config: AxiosRequestConfig,
     cacheKey?: string,
@@ -204,21 +196,25 @@ class ApiClient {
       try {
         await this.client.post('/auth/logout', { refreshToken: refresh });
       } catch (error) {
-        // Continue with logout even if API call fails
       }
     }
     tokenManager.clearTokens();
   }
 
+  async refreshAccessToken(refreshToken: string) {
+    const response = await this.client.post('/auth/refresh-token', { refreshToken });
+    return response.data.data;
+  }
+
   async getCurrentUser() {
-    return this.request<any>(
+    const response = await this.request<any>(
       { method: 'GET', url: '/auth/me' },
       'current-user',
       5 * 60 * 1000 // 5 minutes
     );
+    return response.user;
   }
 
-  // Subject endpoints
   async getSubjects(params?: { page?: number; limit?: number; grade_level?: number }) {
     return this.request<any>(
       { method: 'GET', url: '/subjects', params },
@@ -370,12 +366,61 @@ class ApiClient {
     );
   }
 
+  async getTeacherSubjects(params?: { page?: number; limit?: number }) {
+    return this.request<any>(
+      { method: 'GET', url: '/teachers/subjects', params },
+      `teacher-subjects-${params?.page || 1}`,
+      5 * 60 * 1000
+    );
+  }
+
+  async getEnrolledStudents(subjectId: number) {
+    return this.request<any>(
+      { method: 'GET', url: `/teachers/students/${subjectId}` },
+      `subject-students-${subjectId}`,
+      5 * 60 * 1000
+    );
+  }
+
   async getSubjectAnalytics(subjectId: number) {
     return this.request<any>(
       { method: 'GET', url: `/teachers/analytics/${subjectId}` },
       `analytics-${subjectId}`,
       10 * 60 * 1000
     );
+  }
+
+  async getQuizResults(quizId: number) {
+    return this.request<any>(
+      { method: 'GET', url: `/teachers/quiz-results/${quizId}` },
+      `quiz-results-${quizId}`,
+      5 * 60 * 1000
+    );
+  }
+
+  async updateSubject(id: number, data: { name: string; description: string; grade_level: number }) {
+    const response = await this.client.put(`/subjects/${id}`, data);
+    return response.data;
+  }
+
+  async deleteSubject(id: number) {
+    const response = await this.client.delete(`/subjects/${id}`);
+    return response.data;
+  }
+
+  async createQuiz(data: any) {
+    const response = await this.client.post('/quizzes', data);
+    return response.data;
+  }
+
+  async updateQuiz(id: number, data: any) {
+    const response = await this.client.put(`/quizzes/${id}`, data);
+    return response.data;
+  }
+
+  async deleteQuiz(id: number) {
+    const response = await this.client.delete(`/quizzes/${id}`);
+    return response.data;
   }
 
   // Admin endpoints
