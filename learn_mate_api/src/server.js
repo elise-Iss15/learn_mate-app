@@ -17,7 +17,6 @@ const adminRoutes = require('./routes/admin.routes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS - Allow cross-origin requests
 const corsOptions = {
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
@@ -39,10 +38,9 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// General API rate limiting
 const apiLimiter = rateLimit({
-  windowMs: 60000, // 1 minute
-  max: 100, // 100 requests per minute
+  windowMs: 60000,
+  max: 100,
   message: {
     success: false,
     message: 'Too many requests, please slow down.'

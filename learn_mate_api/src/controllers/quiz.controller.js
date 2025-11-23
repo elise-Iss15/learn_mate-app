@@ -9,7 +9,6 @@ const getQuizById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user ? req.user.id : null;
 
-  // Get quiz details
   const [quizzes] = await pool.query(
     `SELECT q.*, 
             l.title as lesson_title,
@@ -30,7 +29,6 @@ const getQuizById = asyncHandler(async (req, res) => {
 
   const quiz = quizzes[0];
 
-  // Get questions with options
   const [questions] = await pool.query(
     `SELECT id, question_text, question_type, points, order_number
      FROM questions
@@ -39,11 +37,10 @@ const getQuizById = asyncHandler(async (req, res) => {
     [id]
   );
 
-  // Get options for multiple choice questions
   for (let question of questions) {
     if (question.question_type === 'multiple_choice') {
       const [options] = await pool.query(
-        `SELECT id, option_text
+        `SELECT id, option_text, is_correct
          FROM question_options
          WHERE question_id = ?
          ORDER BY id ASC`,
@@ -55,7 +52,6 @@ const getQuizById = asyncHandler(async (req, res) => {
 
   quiz.questions = questions;
 
-  // If user is authenticated and is a student, get their attempts
   if (userId && req.user.role === 'student') {
     const [attempts] = await pool.query(
       `SELECT id, score, total_points, attempt_number, started_at, completed_at
@@ -92,7 +88,6 @@ const createQuiz = asyncHandler(async (req, res) => {
   } = req.body;
   const created_by = req.user.id;
 
-  // Verify lesson exists and user has permission
   const [lessons] = await pool.query(
     `SELECT l.id, s.created_by as subject_creator
      FROM lessons l
@@ -115,12 +110,10 @@ const createQuiz = asyncHandler(async (req, res) => {
     });
   }
 
-  // Start transaction
   const connection = await pool.getConnection();
   await connection.beginTransaction();
 
   try {
-    // Create quiz
     const quizQuery = `
       INSERT INTO quizzes (lesson_id, title, description, time_limit, passing_score, max_attempts, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -138,7 +131,6 @@ const createQuiz = asyncHandler(async (req, res) => {
 
     const quizId = quizResult.insertId;
 
-    // Create questions if provided
     if (questions && questions.length > 0) {
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
@@ -158,7 +150,6 @@ const createQuiz = asyncHandler(async (req, res) => {
 
         const questionId = questionResult.insertId;
 
-        // Create options for multiple choice questions
         if (q.question_type === 'multiple_choice' && q.options && q.options.length > 0) {
           for (let option of q.options) {
             const optionQuery = `
@@ -178,7 +169,6 @@ const createQuiz = asyncHandler(async (req, res) => {
 
     await connection.commit();
 
-    // Fetch created quiz
     const [quizzes] = await pool.query(
       'SELECT * FROM quizzes WHERE id = ?',
       [quizId]
@@ -206,7 +196,6 @@ const updateQuiz = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { title, description, time_limit, passing_score, max_attempts } = req.body;
 
-  // Get quiz and check permissions
   const [quizzes] = await pool.query(
     `SELECT q.*, l.subject_id, s.created_by as subject_creator
      FROM quizzes q
@@ -267,7 +256,6 @@ const updateQuiz = asyncHandler(async (req, res) => {
 const deleteQuiz = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  // Get quiz and check permissions
   const [quizzes] = await pool.query(
     `SELECT q.*, s.created_by as subject_creator
      FROM quizzes q
@@ -310,7 +298,6 @@ const startQuizAttempt = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const student_id = req.user.id;
 
-  // Get quiz details
   const [quizzes] = await pool.query(
     'SELECT * FROM quizzes WHERE id = ?',
     [id]
@@ -325,7 +312,6 @@ const startQuizAttempt = asyncHandler(async (req, res) => {
 
   const quiz = quizzes[0];
 
-  // Check previous attempts
   const [attempts] = await pool.query(
     'SELECT COUNT(*) as count FROM quiz_attempts WHERE quiz_id = ? AND student_id = ?',
     [id, student_id]
@@ -338,7 +324,6 @@ const startQuizAttempt = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get total points for the quiz
   const [pointsResult] = await pool.query(
     'SELECT SUM(points) as total FROM questions WHERE quiz_id = ?',
     [id]
@@ -346,7 +331,6 @@ const startQuizAttempt = asyncHandler(async (req, res) => {
 
   const total_points = pointsResult[0].total || 0;
 
-  // Create new attempt
   const query = `
     INSERT INTO quiz_attempts (quiz_id, student_id, total_points, attempt_number, is_synced)
     VALUES (?, ?, ?, ?, true)
@@ -380,7 +364,6 @@ const submitQuiz = asyncHandler(async (req, res) => {
   const { attempt_id, answers } = req.body;
   const student_id = req.user.id;
 
-  // Verify attempt belongs to student
   const [attempts] = await pool.query(
     'SELECT * FROM quiz_attempts WHERE id = ? AND student_id = ? AND quiz_id = ?',
     [attempt_id, student_id, id]
@@ -402,7 +385,6 @@ const submitQuiz = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get quiz details
   const [quizzes] = await pool.query(
     'SELECT * FROM quizzes WHERE id = ?',
     [id]
@@ -410,7 +392,6 @@ const submitQuiz = asyncHandler(async (req, res) => {
 
   const quiz = quizzes[0];
 
-  // Start transaction
   const connection = await pool.getConnection();
   await connection.beginTransaction();
 
@@ -418,27 +399,23 @@ const submitQuiz = asyncHandler(async (req, res) => {
     let totalScore = 0;
     const feedback = [];
 
-    // Process each answer
     for (let answer of answers) {
       const { question_id, student_answer } = answer;
 
-      // Get question details
       const [questions] = await connection.query(
         'SELECT * FROM questions WHERE id = ? AND quiz_id = ?',
         [question_id, id]
       );
 
       if (questions.length === 0) {
-        continue; // Skip invalid question IDs
+        continue;
       }
 
       const question = questions[0];
       let isCorrect = false;
       let pointsEarned = 0;
 
-      // Check answer based on question type
       if (question.question_type === 'multiple_choice') {
-        // For multiple choice, check if selected option is correct
         const [options] = await connection.query(
           'SELECT * FROM question_options WHERE question_id = ? AND option_text = ? AND is_correct = true',
           [question_id, student_answer]
@@ -456,7 +433,6 @@ const submitQuiz = asyncHandler(async (req, res) => {
         totalScore += pointsEarned;
       }
 
-      // Save student answer
       const answerQuery = `
         INSERT INTO student_answers (attempt_id, question_id, student_answer, is_correct, points_earned)
         VALUES (?, ?, ?, ?, ?)
@@ -470,7 +446,6 @@ const submitQuiz = asyncHandler(async (req, res) => {
         pointsEarned
       ]);
 
-      // Add to feedback
       feedback.push({
         question_id,
         is_correct: isCorrect,
@@ -479,7 +454,6 @@ const submitQuiz = asyncHandler(async (req, res) => {
       });
     }
 
-    // Update quiz attempt with score
     const updateQuery = `
       UPDATE quiz_attempts
       SET score = ?, completed_at = CURRENT_TIMESTAMP
@@ -490,7 +464,6 @@ const submitQuiz = asyncHandler(async (req, res) => {
 
     await connection.commit();
 
-    // Calculate if passed
     const percentage = (totalScore / attempt.total_points) * 100;
     const passed = percentage >= quiz.passing_score;
 
@@ -531,7 +504,6 @@ const getQuizAttempts = asyncHandler(async (req, res) => {
     [id, student_id]
   );
 
-  // Get detailed answers for each attempt
   for (let attempt of attempts) {
     if (attempt.completed_at) {
       const [answers] = await pool.query(

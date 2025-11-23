@@ -234,29 +234,32 @@ const deleteSubject = asyncHandler(async (req, res) => {
  */
 const getMySubjects = asyncHandler(async (req, res) => {
   const teacherId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
   const { page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
+
+  const whereClause = isAdmin ? '' : 'WHERE s.created_by = ?';
+  const whereParams = isAdmin ? [] : [teacherId];
 
   const query = `
     SELECT s.*,
            (SELECT COUNT(*) FROM lessons WHERE subject_id = s.id) as lesson_count,
            (SELECT COUNT(DISTINCT e.student_id) FROM enrollments e WHERE e.subject_id = s.id) as enrolled_students
     FROM subjects s
-    WHERE s.created_by = ?
+    ${whereClause}
     ORDER BY s.created_at DESC
     LIMIT ? OFFSET ?
   `;
 
   const [subjects] = await pool.query(query, [
-    teacherId,
+    ...whereParams,
     parseInt(limit),
     parseInt(offset)
   ]);
 
-  // Get total count
   const [countResult] = await pool.query(
-    'SELECT COUNT(*) as total FROM subjects WHERE created_by = ?',
-    [teacherId]
+    `SELECT COUNT(*) as total FROM subjects ${whereClause}`,
+    whereParams
   );
 
   const total = countResult[0].total;

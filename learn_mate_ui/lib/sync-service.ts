@@ -135,9 +135,15 @@ class SyncService {
 
   // Sync quiz submission
   private async syncQuizSubmission(item: SyncQueueItem): Promise<void> {
-    // Extract quiz ID from endpoint (e.g., /quizzes/1/submit -> 1)
     const quizId = parseInt(item.endpoint.split('/')[2]);
-    await api.submitQuiz(quizId, item.payload);
+    
+    const attemptResponse = await api.startQuizAttempt(quizId);
+    const attemptData = attemptResponse.data || attemptResponse;
+    
+    await api.submitQuiz(quizId, {
+      attempt_id: attemptData.attempt_id,
+      answers: item.payload.answers
+    });
   }
 
   // Sync lesson progress
