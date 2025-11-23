@@ -16,6 +16,17 @@ An offline-first e-learning platform designed specifically for educational insti
 
 - **UI (Frontend)**: [https://learn-mate-app.vercel.app](https://learn-mate-app.vercel.app)
 - **API (Backend)**: [https://learn-mate-app.onrender.com](https://learn-mate-app.onrender.com)
+- **Video Demo**: [Watch Demo on Google Drive](https://drive.google.com/file/d/1YPaa-yiCYBGGyYsbgZOtqXC6xX0XL2m-/view?usp=sharing)
+
+### Test Accounts
+
+You can use the following test accounts to explore the platform:
+
+| Role | Email | Password |
+|------|-------|----------|
+| **Student** | alice@student.ss | password |
+| **Teacher** | john.doe@learnmate.ss | password |
+| **Admin** | admin@gmail.com | password |
 
 ## 📚 Documentation
 
