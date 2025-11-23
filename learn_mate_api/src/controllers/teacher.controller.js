@@ -8,35 +8,35 @@ const { asyncHandler } = require('../middleware/errorHandler');
  */
 const getTeacherDashboard = asyncHandler(async (req, res) => {
   const teacher_id = req.user.id;
+  const isAdmin = req.user.role === 'admin';
 
-  // Get subjects created
+  const whereClause = isAdmin ? '' : 'WHERE created_by = ?';
+  const whereParams = isAdmin ? [] : [teacher_id];
+
   const [subjectCount] = await pool.query(
-    'SELECT COUNT(*) as count FROM subjects WHERE created_by = ?',
-    [teacher_id]
+    `SELECT COUNT(*) as count FROM subjects ${whereClause}`,
+    whereParams
   );
 
-  // Get total lessons created
   const [lessonCount] = await pool.query(
-    'SELECT COUNT(*) as count FROM lessons WHERE created_by = ?',
-    [teacher_id]
+    `SELECT COUNT(*) as count FROM lessons ${whereClause}`,
+    whereParams
   );
 
-  // Get total quizzes created
   const [quizCount] = await pool.query(
-    'SELECT COUNT(*) as count FROM quizzes WHERE created_by = ?',
-    [teacher_id]
+    `SELECT COUNT(*) as count FROM quizzes ${whereClause}`,
+    whereParams
   );
 
-  // Get total enrolled students across all subjects
+  const subjectWhereClause = isAdmin ? '' : 'WHERE s.created_by = ?';
   const [studentCount] = await pool.query(
     `SELECT COUNT(DISTINCT e.student_id) as count
      FROM enrollments e
      JOIN subjects s ON e.subject_id = s.id
-     WHERE s.created_by = ?`,
-    [teacher_id]
+     ${subjectWhereClause}`,
+    whereParams
   );
 
-  // Get recent quiz submissions
   const [recentSubmissions] = await pool.query(
     `SELECT 
        qa.id,
@@ -54,13 +54,12 @@ const getTeacherDashboard = asyncHandler(async (req, res) => {
      JOIN quizzes q ON qa.quiz_id = q.id
      JOIN lessons l ON q.lesson_id = l.id
      JOIN subjects s ON l.subject_id = s.id
-     WHERE s.created_by = ? AND qa.completed_at IS NOT NULL
+     ${isAdmin ? 'WHERE qa.completed_at IS NOT NULL' : 'WHERE s.created_by = ? AND qa.completed_at IS NOT NULL'}
      ORDER BY qa.completed_at DESC
      LIMIT 10`,
-    [teacher_id]
+    isAdmin ? [] : [teacher_id]
   );
 
-  // Get subject performance overview
   const [subjectPerformance] = await pool.query(
     `SELECT 
        s.id,
@@ -76,11 +75,11 @@ const getTeacherDashboard = asyncHandler(async (req, res) => {
      LEFT JOIN lessons l ON l.subject_id = s.id
      LEFT JOIN quizzes q ON q.lesson_id = l.id
      LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id AND qa.completed_at IS NOT NULL
-     WHERE s.created_by = ?
+     ${whereClause}
      GROUP BY s.id, s.name
      ORDER BY enrolled_students DESC
      LIMIT 5`,
-    [teacher_id]
+    whereParams
   );
 
   res.json({
@@ -106,8 +105,12 @@ const getTeacherDashboard = asyncHandler(async (req, res) => {
  */
 const getTeacherSubjects = asyncHandler(async (req, res) => {
   const teacher_id = req.user.id;
+  const isAdmin = req.user.role === 'admin';
   const { page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
+
+  const whereClause = isAdmin ? '' : 'WHERE s.created_by = ?';
+  const whereParams = isAdmin ? [] : [teacher_id];
 
   const [subjects] = await pool.query(
     `SELECT 
@@ -115,15 +118,15 @@ const getTeacherSubjects = asyncHandler(async (req, res) => {
        (SELECT COUNT(*) FROM lessons WHERE subject_id = s.id) as lesson_count,
        (SELECT COUNT(*) FROM enrollments WHERE subject_id = s.id) as student_count
      FROM subjects s
-     WHERE s.created_by = ?
+     ${whereClause}
      ORDER BY s.created_at DESC
      LIMIT ? OFFSET ?`,
-    [teacher_id, parseInt(limit), parseInt(offset)]
+    [...whereParams, parseInt(limit), parseInt(offset)]
   );
 
   const [countResult] = await pool.query(
-    'SELECT COUNT(*) as total FROM subjects WHERE created_by = ?',
-    [teacher_id]
+    `SELECT COUNT(*) as total FROM subjects ${whereClause}`,
+    whereParams
   );
 
   const total = countResult[0].total;
@@ -150,10 +153,15 @@ const getTeacherSubjects = asyncHandler(async (req, res) => {
 const getEnrolledStudents = asyncHandler(async (req, res) => {
   const { subjectId } = req.params;
   const teacher_id = req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  // Admins can view any subject, teachers only their own
+  const whereClause = isAdmin ? 'WHERE id = ?' : 'WHERE id = ? AND created_by = ?';
+  const whereParams = isAdmin ? [subjectId] : [subjectId, teacher_id];
 
   const [subjects] = await pool.query(
-    'SELECT * FROM subjects WHERE id = ? AND created_by = ?',
-    [subjectId, teacher_id]
+    `SELECT * FROM subjects ${whereClause}`,
+    whereParams
   );
 
   if (subjects.length === 0) {
@@ -216,10 +224,15 @@ const getEnrolledStudents = asyncHandler(async (req, res) => {
 const getSubjectAnalytics = asyncHandler(async (req, res) => {
   const { subjectId } = req.params;
   const teacher_id = req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  // Admins can view analytics for any subject, teachers only their own
+  const whereClause = isAdmin ? 'WHERE id = ?' : 'WHERE id = ? AND created_by = ?';
+  const whereParams = isAdmin ? [subjectId] : [subjectId, teacher_id];
 
   const [subjects] = await pool.query(
-    'SELECT * FROM subjects WHERE id = ? AND created_by = ?',
-    [subjectId, teacher_id]
+    `SELECT * FROM subjects ${whereClause}`,
+    whereParams
   );
 
   if (subjects.length === 0) {
@@ -359,14 +372,21 @@ const getSubjectAnalytics = asyncHandler(async (req, res) => {
 const getQuizResults = asyncHandler(async (req, res) => {
   const { quizId } = req.params;
   const teacher_id = req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  // Admins can view results for any quiz, teachers only their own
+  const whereClause = isAdmin 
+    ? 'WHERE q.id = ?' 
+    : 'WHERE q.id = ? AND s.created_by = ?';
+  const whereParams = isAdmin ? [quizId] : [quizId, teacher_id];
 
   const [quizzes] = await pool.query(
     `SELECT q.*, s.created_by
      FROM quizzes q
      JOIN lessons l ON q.lesson_id = l.id
      JOIN subjects s ON l.subject_id = s.id
-     WHERE q.id = ? AND s.created_by = ?`,
-    [quizId, teacher_id]
+     ${whereClause}`,
+    whereParams
   );
 
   if (quizzes.length === 0) {

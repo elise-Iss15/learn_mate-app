@@ -268,6 +268,59 @@ export interface AdminAnalytics {
   active_users_last_30_days: number;
 }
 
+export interface PlatformAnalytics {
+  user_statistics: {
+    total_users: number;
+    by_role: Array<{
+      role: string;
+      count: number;
+    }>;
+    active_students_7days: number;
+  };
+  content_statistics: {
+    total_subjects: number;
+    total_lessons: number;
+    total_quizzes: number;
+    total_enrollments: number;
+  };
+  quiz_statistics: {
+    total_attempts: number;
+    average_score: number;
+  };
+  recent_activity: Array<{
+    date: string;
+    new_users: number;
+  }>;
+  popular_subjects: Array<{
+    id: number;
+    name: string;
+    grade_level: number;
+    enrollment_count: number;
+  }>;
+}
+
+export interface UserWithStats extends User {
+  stats?: {
+    enrolled_subjects?: number;
+    completed_lessons?: number;
+    quiz_attempts?: number;
+    subjects_created?: number;
+    lessons_created?: number;
+    quizzes_created?: number;
+  };
+  updated_at?: string;
+}
+
+export interface UsersListResponse {
+  users: UserWithStats[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   message: string;

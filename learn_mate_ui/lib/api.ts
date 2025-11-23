@@ -432,12 +432,47 @@ class ApiClient {
     );
   }
 
-  async getAllUsers(params?: { page?: number; limit?: number }) {
+  async getAllUsers(params?: { 
+    page?: number; 
+    limit?: number; 
+    role?: string; 
+    grade_level?: number;
+    search?: string;
+  }) {
     return this.request<any>(
       { method: 'GET', url: '/admin/users', params },
-      `admin-users-${params?.page || 1}`,
+      `admin-users-${JSON.stringify(params || {})}`,
       5 * 60 * 1000
     );
+  }
+
+  async getUserById(id: number) {
+    const response = await this.client.get(`/admin/users/${id}`);
+    return response.data;
+  }
+
+  async createUser(data: {
+    username: string;
+    email: string;
+    password: string;
+    role: string;
+    first_name?: string;
+    last_name?: string;
+    grade_level?: number;
+    preferred_language?: string;
+  }) {
+    const response = await this.client.post('/admin/users', data);
+    return response.data;
+  }
+
+  async updateUserRole(id: number, role: string) {
+    const response = await this.client.put(`/admin/users/${id}/role`, { role });
+    return response.data;
+  }
+
+  async deleteUser(id: number) {
+    const response = await this.client.delete(`/admin/users/${id}`);
+    return response.data;
   }
 }
 
